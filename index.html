@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hidden Noise Generator</title>
+    <style>
+      :root {
+        --bg: #0a1020;
+        --panel: #121b2f;
+        --panel-2: #171f35;
+        --text: #edf3ff;
+        --muted: #aab9d8;
+        --line: #2d3e63;
+        --primary: #8ad0ff;
+        --primary-2: #5ca3ff;
+        --accent: #b8f3d4;
+        --shadow: rgba(0, 0, 0, 0.25);
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        background: radial-gradient(circle at top, #1b2a47, var(--bg) 45%);
+        color: var(--text);
+        font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
+      }
+
+      body {
+        padding: 32px 20px 72px;
+        display: flex;
+        justify-content: center;
+      }
+
+      .app {
+        width: min(980px, 100%);
+      }
+
+      .header {
+        margin-bottom: 20px;
+      }
+
+      .eyebrow {
+        font-size: 0.75rem;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--primary);
+        font-weight: 700;
+        margin: 0 0 8px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(2rem, 4vw, 3.2rem);
+      }
+
+      .subtitle {
+        margin-top: 12px;
+        color: var(--muted);
+        line-height: 1.75;
+        font-size: 1rem;
+      }
+
+      .panel {
+        background: rgba(18, 27, 47, 0.96);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 18px 36px var(--shadow);
+      }
+
+      label {
+        display: block;
+        margin-bottom: 10px;
+        font-weight: 700;
+      }
+
+      textarea {
+        width: 100%;
+        resize: vertical;
+        min-height: 160px;
+        background: rgba(10, 16, 32, 0.85);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        color: var(--text);
+        font: inherit;
+        line-height: 1.8;
+        padding: 14px 16px;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      button {
+        border: none;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--primary), var(--primary-2));
+        color: #051522;
+        font-weight: 800;
+        padding: 11px 18px;
+        cursor: pointer;
+        transition: transform 0.08s ease, opacity 0.08s ease;
+      }
+
+      button:hover { transform: translateY(-1px); }
+      button:active { transform: translateY(0); }
+
+      .secondary {
+        background: #1a233a;
+        color: var(--text);
+        border: 1px solid var(--line);
+      }
+
+      .output-box {
+        white-space: pre-wrap;
+        line-height: 1.9;
+        background: rgba(10, 16, 32, 0.78);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px;
+        min-height: 120px;
+      }
+
+      .meta {
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .footer-note {
+        font-size: 0.85rem;
+        color: var(--muted);
+        margin-top: 8px;
+      }
+
+      @media (max-width: 640px) {
+        .toolbar {
+          flex-direction: column;
+        }
+        button {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="header">
+        <p class="eyebrow">AI-only noise text</p>
+        <h1>Hidden Noise Generator</h1>
+        <p class="subtitle">
+          本文は普通の文章のままにして、その後に関係ない雑談文を足します。<br />
+          一般人には「ただの文章」に見えますが、秘密キーを知っている人だけが生成ルールを見抜けます。
+        </p>
+      </header>
+
+      <section class="panel">
+        <label for="inputText">本文</label>
+        <textarea id="inputText" spellcheck="false">AIに食わせた時にしか読み取られない文字を自動生成したいです。本文とは関係ない単語を足して、AI向けに補助情報として扱いたいです。</textarea>
+
+        <div class="toolbar">
+          <button id="generateBtn" type="button">文章を生成</button>
+          <button id="copyBtn" class="secondary" type="button">コピー</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <label>生成結果</label>
+        <div id="output" class="output-box"></div>
+        <div class="meta" id="meta"></div>
+      </section>
+    </main>
+
+    <script>
+      const SECRET_KEY = "drowse-lab";
+
+      const NOISE_BLOCKS = [
+        [
+          "朝の雨が少し冷たくて、駅前のベンチが湿っていた。",
+          "近くのコンビニでコーヒーを買って、窓辺で少しだけ休んだ。",
+          "通り過ぎるバスの音がやけに大きくて、思わず見上げた。",
+          "店の前に置いてある花の鉢が、今日は特にきれいだった。"
+        ],
+        [
+          "猫がベランダで丸くなっていて、風が少しだけ気持ちよかった。",
+          "昨日の本棚の整理がまだ終わっていなくて、少し気分が乱れていた。",
+          "駅のホームで少しだけ本をめくって、時間を潰した。",
+          "夕方の空が薄い青で、ちょっと落ち着いた気持ちになった。"
+        ],
+        [
+          "新しい靴のひもを結ぶのに少し手間取って、思わず笑ってしまった。",
+          "コンセントの位置が少し気になる部屋だったので、整理を考えた。",
+          "近所の小さな公園で、風が木の葉を軽く揺らしていた。",
+          "雨上がりの道が少しだけきれいに見えて、気分が良くなった。"
+        ],
+        [
+          "昼食に選んだパンが予想よりおいしくて、気分が上がった。",
+          "電車の中で見た景色がやけに静かで、少しだけ余韻が残った。",
+          "小さな公園のベンチに座って、風の匂いを感じた。",
+          "買っておいた本が気になって、少しだけ読み始めてしまった。"
+        ],
+        [
+          "駅前の自販機の光が少しだけ青くて、端末を見つめていた。",
+          "本を閉じた後に、少しだけ眺める空がやけに静かだった。",
+          "ドアの前に置いてある傘が、今朝ほどではないけれど、親しみがあった。",
+          "散歩の途中で見た白い雲が、ほんの少しだけ美しく見えた。"
+        ]
+      ];
+
+      function hashString(str) {
+        let hash = 2166136261;
+        for (let i = 0; i < str.length; i++) {
+          hash ^= str.charCodeAt(i);
+          hash = Math.imul(hash, 16777619);
+        }
+        return hash >>> 0;
+      }
+
+      function chooseNoiseSentence(text, index, key) {
+        const seed = hashString(`${key}:${text}:${index}`);
+        const blockIndex = seed % NOISE_BLOCKS.length;
+        const block = NOISE_BLOCKS[blockIndex];
+        const sentenceIndex = (seed >> 1) % block.length;
+        return {
+          blockIndex,
+          sentence: block[sentenceIndex]
+        };
+      }
+
+      function generateNoiseParagraph(text, key = SECRET_KEY) {
+        const words = (text.match(/[A-Za-z0-9ぁ-んァ-ン一-龥々ー]+/g) || []);
+        const safeWords = words.length ? words : ["sample", "text", "hidden", "noise"];
+        const sentenceCount = Math.min(8, Math.max(4, safeWords.length / 2));
+
+        const list = [];
+        for (let i = 0; i < sentenceCount; i++) {
+          const { sentence } = chooseNoiseSentence(text, i, key);
+          list.push(sentence);
+        }
+
+        return list.join(" ");
+      }
+
+      function buildOutput(text, key = SECRET_KEY) {
+        const safeText = (text || "").trim();
+        if (!safeText) {
+          return {
+            body: "",
+            noise: "",
+            meta: "本文が空です。"
+          };
+        }
+
+        const noise = generateNoiseParagraph(safeText, key);
+
+        return {
+          body: safeText,
+          noise,
+          meta: `秘密キー: ${key} / 生成パターン: hash-based noise selection`
+        };
+      }
+
+      function renderResult() {
+        const input = document.getElementById("inputText").value.trim();
+        const { body, noise, meta } = buildOutput(input, SECRET_KEY);
+
+        const output = document.getElementById("output");
+        if (!body) {
+          output.textContent = "本文を入力してください。";
+          document.getElementById("meta").textContent = "";
+          return;
+        }
+
+        output.textContent = body + "\n\n" + noise;
+        document.getElementById("meta").textContent = meta;
+      }
+
+      document.getElementById("generateBtn").addEventListener("click", renderResult);
+      document.getElementById("inputText").addEventListener("input", renderResult);
+
+      document.getElementById("copyBtn").addEventListener("click", async () => {
+        const text = document.getElementById("output").textContent;
+        try {
+          await navigator.clipboard.writeText(text);
+          document.getElementById("copyBtn").textContent = "コピーしました";
+          setTimeout(() => {
+            document.getElementById("copyBtn").textContent = "コピー";
+          }, 1200);
+        } catch (error) {
+          console.warn("コピー失敗:", error);
+          document.getElementById("copyBtn").textContent = "コピー失敗";
+          setTimeout(() => {
+            document.getElementById("copyBtn").textContent = "コピー";
+          }, 1200);
+        }
+      });
+
+      renderResult();
+    </script>
+  </body>
+</html>
